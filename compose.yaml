@@ -1,0 +1,382 @@
+# Cantábria — ÚNICO compose do projeto (ADR 0008). Tudo sobe daqui, por profile:
+#
+#   core           clickhouse (dados oficiais) + app (Chainlit)
+#   seed           seed: schema + carga determinística (mesma imagem do app)
+#   stores         mongodb, qdrant, minio — stores da Fase 3 (ADR 0003/0014);
+#                  o app usa MongoDB (histórico/auditoria/outbox), Qdrant +
+#                  embeddings (RAG semântico, com fallback BM25) e MinIO
+#                  (documentos); cada um degrada de forma graciosa
+#   observability  stack Langfuse v4 (tracing opcional; segredos renderizados
+#                  por scripts/langfuse_up.sh a partir de infrastructure/.env)
+#
+# Uso (a partir da raiz do repositório, com .env e config.yaml preenchidos):
+#
+#   docker compose --profile core up -d --build     # ou: make demo
+#   docker compose --profile seed run --rm seed
+#   docker compose --profile stores up -d
+#   ./scripts/langfuse_up.sh                         # profile observability
+#   docker compose --profile core --profile stores --profile observability \
+#     --profile seed down --remove-orphans           # ou: make stack-down
+#
+# Portas no host (só loopback, exceto o app, a UI do Langfuse e o MinIO do
+# Langfuse em 9090/9091, que a UI do navegador precisa alcançar):
+#   8000 app · 8123/9000 clickhouse · 27017 mongodb · 6333 qdrant ·
+#   9002/9003 minio (API/console) · 3000 langfuse · 3030 langfuse-worker ·
+#   9090/9091 langfuse-minio · 6379 langfuse-redis · 5432 langfuse-postgres.
+#   O ClickHouse do Langfuse NÃO publica porta: só o Langfuse fala com ele.
+
+name: cantabria
+
+# A mesma imagem serve o app e o seed: `build` garante que `run --rm seed`
+# constrói se ainda não existir; a tag fixa evita duas imagens iguais.
+x-cantabria-image: &cantabria-image
+  image: cantabria:local
+  build:
+    context: .
+
+services:
+  # ---------------------------------------------------------------------------
+  # core — dados oficiais + aplicação
+  # ---------------------------------------------------------------------------
+  clickhouse:
+    # No profile `seed` também, para `docker compose --profile seed run seed`
+    # subir o banco sozinho (dependências não herdam profiles).
+    profiles: [core, seed]
+    # Versão LTS PINADA: nunca `latest` — reprodutibilidade do dataset.
+    image: clickhouse/clickhouse-server:24.8
+    container_name: cantabria-clickhouse
+    restart: unless-stopped
+    # NÃO usar `env_file` aqui: o .env contém CLICKHOUSE_USER/PASSWORD da
+    # aplicação, que o entrypoint da imagem interpretaria como o usuário
+    # default a criar. Só o que o container precisa; `${VAR:?}` falha cedo.
+    # Também NÃO passar CLICKHOUSE_DB: o entrypoint criaria o banco logando
+    # como `default` sem senha, mas o users.xml dá senha ao `default` — o
+    # container morreria no primeiro boot. O `seed` faz CREATE DATABASE.
+    environment:
+      CLICKHOUSE_APP_PASSWORD: ${CLICKHOUSE_PASSWORD:?defina CLICKHOUSE_PASSWORD no .env}
+      CLICKHOUSE_SEED_PASSWORD: ${CLICKHOUSE_SEED_PASSWORD:?defina CLICKHOUSE_SEED_PASSWORD no .env}
+      CLICKHOUSE_DEFAULT_PASSWORD: ${CLICKHOUSE_DEFAULT_PASSWORD:?defina CLICKHOUSE_DEFAULT_PASSWORD no .env}
+    ports:
+      - "127.0.0.1:8123:8123"   # HTTP (clickhouse-connect)
+      - "127.0.0.1:9000:9000"   # protocolo nativo (clickhouse-client)
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+      - ./infra/clickhouse/config/config.d:/etc/clickhouse-server/config.d:ro
+      - ./infra/clickhouse/users.d:/etc/clickhouse-server/users.d:ro
+      # O ClickHouse não roda initdb.d como o Postgres: o DDL em
+      # ./infra/clickhouse/init/ é aplicado pelo serviço `seed`.
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping | grep -q 'Ok.'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - cantabria-net
+
+  app:
+    <<: *cantabria-image
+    profiles: [core]
+    container_name: cantabria-app
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      CHAINLIT_HOST: 0.0.0.0
+      CHAINLIT_PORT: 8000
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      # Dentro da rede os stores são os serviços, não o 127.0.0.1 do .env;
+      # fora do ar, a aplicação degrada com aviso (ADR 0010/0014).
+      MONGO_URL: mongodb://mongodb:27017/cantabria
+      QDRANT_URL: http://qdrant:6333
+      MINIO_ENDPOINT: http://minio:9000
+      CONFIG_PATH: /app/config.yaml
+      CANTABRIA_DATA_DIR: /app/data
+    # Permite alcançar serviços publicados no host (ex.: Langfuse em
+    # http://host.docker.internal:3000, ou um LLM local) de dentro do container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    networks:
+      - cantabria-net
+
+  # ---------------------------------------------------------------------------
+  # seed — schema + carga determinística (idempotente; roda e sai)
+  # ---------------------------------------------------------------------------
+  seed:
+    <<: *cantabria-image
+    profiles: [seed]
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    env_file:
+      - .env
+    # Dentro da rede do compose o banco se chama `clickhouse`, não 127.0.0.1;
+    # `environment` vence o env_file. O seed lê CLICKHOUSE_SEED_USER/PASSWORD
+    # (escrita + DDL) e CLICKHOUSE_DB do .env.
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CANTABRIA_DATA_DIR: /app/data
+    working_dir: /app
+    command: ["python", "utils/seed_clickhouse.py"]
+    networks:
+      - cantabria-net
+
+  # ---------------------------------------------------------------------------
+  # stores — MongoDB, Qdrant e MinIO (Fase 3, ADR 0003/0010/0014). Suba com
+  # `docker compose --profile stores up -d`: o app usa Mongo (histórico), e o
+  # RAG semântico usa Qdrant + MinIO (documentos gerados/ingeridos via
+  # `make ingest`); sem eles, busca lexical BM25 e memória, sem derrubar a demo.
+  # ---------------------------------------------------------------------------
+  mongodb:
+    profiles: [stores]
+    image: mongo:7
+    container_name: cantabria-mongodb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - cantabria-net
+
+  qdrant:
+    profiles: [stores]
+    image: qdrant/qdrant:v1.12.4
+    container_name: cantabria-qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      # A imagem não traz curl/wget; o bash abre um socket TCP na porta HTTP.
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - cantabria-net
+
+  minio:
+    profiles: [stores]
+    # A MinIO saiu do Docker Hub (minio/minio não existe mais lá) e o quay.io
+    # exige login neste ambiente; usamos a imagem Chainguard já empregada pelo
+    # Langfuse (mesmo binário `minio`, com `mc` para o healthcheck).
+    image: cgr.dev/chainguard/minio
+    container_name: cantabria-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?defina MINIO_ROOT_USER no .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?defina MINIO_ROOT_PASSWORD no .env}
+      # Alias `local` (sem /root/.mc na imagem mínima) para `mc ready local`.
+      MC_HOST_local: http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@localhost:9000
+    ports:
+      # 9002/9003 para não colidir com 9000 (ClickHouse nativo) nem com
+      # 9090/9091 (MinIO do Langfuse).
+      - "127.0.0.1:9002:9000"   # API S3
+      - "127.0.0.1:9003:9001"   # console web
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - cantabria-net
+
+  # ---------------------------------------------------------------------------
+  # observability — Langfuse v4 (opcional). Suba com ./scripts/langfuse_up.sh,
+  # que renderiza os arquivos de segredo em infrastructure/docker/** a partir
+  # de infrastructure/.env (só os *.example são versionados). Serviços com
+  # prefixo `langfuse-` e rede própria: nada colide com o ClickHouse dos dados.
+  # O app alcança a UI publicada via http://host.docker.internal:3000
+  # (observability.host no config.yaml).
+  # ---------------------------------------------------------------------------
+  langfuse-worker:
+    profiles: [observability]
+    image: docker.langfuse.com/langfuse/langfuse-worker:4
+    container_name: cantabria-langfuse-worker
+    restart: unless-stopped
+    depends_on: &langfuse-depends-on
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3030:3030"
+    env_file:
+      - ./infrastructure/docker/langfuse/common.env
+      - ./infrastructure/docker/langfuse/worker.env
+    networks:
+      - langfuse-net
+
+  langfuse-web:
+    profiles: [observability]
+    image: docker.langfuse.com/langfuse/langfuse:4
+    container_name: cantabria-langfuse-web
+    restart: unless-stopped
+    depends_on: *langfuse-depends-on
+    ports:
+      # Host port is configurable: the default 3000 may be taken by other
+      # tooling (e.g. the OpenChamber UI); set LANGFUSE_WEB_PORT in .env.
+      - "${LANGFUSE_WEB_PORT:-3000}:3000"
+    env_file:
+      - ./infrastructure/docker/langfuse/common.env
+      - ./infrastructure/docker/langfuse/web.env
+    networks:
+      - langfuse-net
+
+  langfuse-clickhouse:
+    profiles: [observability]
+    image: docker.io/clickhouse/clickhouse-server:25.12
+    container_name: cantabria-langfuse-clickhouse
+    restart: unless-stopped
+    user: "101:101"
+    volumes:
+      - ./infrastructure/docker/clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+      # Arquivo, não o diretório: o entrypoint da imagem grava o próprio
+      # default-user.xml em users.d ao iniciar.
+      - ./infrastructure/docker/clickhouse/users.d/01-langfuse-user.xml:/etc/clickhouse-server/users.d/01-langfuse-user.xml:ro
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    # Sem `ports`: só o Langfuse consulta este ClickHouse (common.env aponta
+    # para langfuse-clickhouse:8123/9000 dentro da rede). Evita a colisão com
+    # 8123/9000 do ClickHouse dos dados oficiais.
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+    networks:
+      - langfuse-net
+
+  langfuse-minio:
+    profiles: [observability]
+    image: cgr.dev/chainguard/minio
+    container_name: cantabria-langfuse-minio
+    restart: unless-stopped
+    entrypoint: ["sh", "/opt/minio/start.sh"]
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    volumes:
+      - ./infrastructure/docker/minio/start.sh:/opt/minio/start.sh:ro
+      - ./infrastructure/docker/minio/root_user:/run/secrets/minio_root_user:ro
+      - ./infrastructure/docker/minio/root_password:/run/secrets/minio_root_password:ro
+      - langfuse_minio_data:/data
+    ports:
+      # 9090 fica aberto porque o navegador busca mídia direto no MinIO
+      # (web.env: LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://localhost:9090).
+      - "9090:9000"
+      - "127.0.0.1:9091:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+    networks:
+      - langfuse-net
+
+  langfuse-redis:
+    profiles: [observability]
+    image: docker.io/redis:7
+    container_name: cantabria-langfuse-redis
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./infrastructure/docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./infrastructure/docker/redis/healthcheck.sh:/usr/local/etc/redis/healthcheck.sh:ro
+      - langfuse_redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "sh", "/usr/local/etc/redis/healthcheck.sh"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    networks:
+      - langfuse-net
+
+  langfuse-postgres:
+    profiles: [observability]
+    image: docker.io/postgres:17
+    container_name: cantabria-langfuse-postgres
+    restart: unless-stopped
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    env_file:
+      - ./infrastructure/docker/postgres/postgres.env
+    volumes:
+      - ./infrastructure/docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./infrastructure/docker/postgres/password.txt:/run/secrets/postgres_password:ro
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - langfuse-net
+
+volumes:
+  clickhouse-data:
+    name: cantabria-clickhouse-data
+  clickhouse-logs:
+    name: cantabria-clickhouse-logs
+  mongodb-data:
+    name: cantabria-mongodb-data
+  qdrant-data:
+    name: cantabria-qdrant-data
+  minio-data:
+    name: cantabria-minio-data
+  # Sem `name`: mantém os nomes que o antigo infrastructure/compose.yaml já
+  # criava (cantabria_langfuse_*), preservando traces existentes no host.
+  langfuse_postgres_data:
+    driver: local
+  langfuse_clickhouse_data:
+    driver: local
+  langfuse_clickhouse_logs:
+    driver: local
+  langfuse_minio_data:
+    driver: local
+  langfuse_redis_data:
+    driver: local
+
+networks:
+  cantabria-net:
+    name: cantabria-net
+    driver: bridge
+  langfuse-net:
+    name: cantabria-langfuse-net
+    driver: bridge

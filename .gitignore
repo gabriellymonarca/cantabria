@@ -1,0 +1,61 @@
+# AI agent configuration is versioned (.devin/, .opencode/, opencode.json);
+# only per-machine overrides stay local.
+.devin/config.local.json
+.opencode/*.local.*
+
+# Dev environment
+.venv
+.env
+config.yaml
+
+# Infrastructure secrets (rendered from *.example; only the templates are committed)
+infrastructure/.env
+infrastructure/docker/clickhouse/users.d/*.xml
+!infrastructure/docker/clickhouse/users.d/*.xml.example
+infrastructure/docker/langfuse/common.env
+infrastructure/docker/langfuse/web.env
+infrastructure/docker/minio/root_user
+infrastructure/docker/minio/root_password
+infrastructure/docker/postgres/password.txt
+infrastructure/docker/redis/redis.conf
+
+# Chainlit runtime: só o config.toml é versionado (a imagem Docker o copia;
+# não contém segredos). Traduções e demais artefatos gerados ficam locais.
+.chainlit/*
+!.chainlit/config.toml
+.files/
+
+# Dataset Parquet gerado por `make data` (reprodutível a partir do seed fixo)
+data/dataset/
+
+# Relatórios de avaliação gerados por `make eval` (reprodutíveis; o resumo
+# versionado fica em docs/evaluation-report.md, tabela "Runs registrados")
+reports/
+
+# Documentos de referência gerados por `make ingest` (derivados do acervo)
+data/reference/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.mypy_cache/
+
+# Editor/OS
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# AI
+.devin
+.opencode
+.github
+opencode.json

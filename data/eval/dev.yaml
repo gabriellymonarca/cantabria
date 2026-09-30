@@ -1,0 +1,1777 @@
+# Split `dev` do dataset de avaliação — banco de perguntas do Cantábria.
+#
+# Fonte: data/eval/cases.md (blocos A–I) + armadilhas de agregação e topologia
+# temporal do checklist §4. Perguntas em pt-BR; plano esperado montado com os
+# ids do catálogo v3. `expected_result_ref` aponta para um caso congelado do
+# oráculo independente (`data/oracle/oracle_v1.yaml`); quando ausente, a camada
+# `engine` usa o `compute_expected` do fixture `parity-tiny-v1` se o plano
+# couber nele.
+#
+# O split `test` é held-out: não entra em ajuste de prompt e exige aprovação
+# humana (data/eval/test.yaml protegido por hook).
+#
+# Convenções de período:
+#   SNAP_AUG26 2026-08-31 · TOTAL_12M 2025-09-01..2026-08-31 (grain total)
+#   P3M jun–ago/26 · P6M mar–ago/26 · P12M set/25–ago/26 · Q26 2026 em quarter
+#   Y25/Y26 total jan–ago de cada ano (variação exige resultado colapsado).
+
+version: 1
+split: dev
+
+cases:
+  # ======================================================================
+  # Bloco A — recorte único (sanity do motor)
+  # ======================================================================
+  - id: DEV-A01
+    category: sanity
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade do Varejo PF em agosto/2026?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md A1"
+    notes: "A quebra por segmento devolve a linha do Varejo PF; recorte não repete quebra."
+
+  - id: DEV-A02
+    category: aggregation_trap
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade média por segmento no último trimestre?"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "definitions.md — weighting; AGENTS.md (mean proibido em profitability)"
+    notes: >
+      Armadilha de média de taxas: a média das taxas mensais não é a taxa da
+      janela. O contrato vigente recusa `mean` em `profitability`; a leitura
+      correta é re-derivar Σmargem ÷ Σsaldo no grão (grain: total, method:
+      null). O cases.md A2 pedia `mean` — superado pelo contrato atual.
+
+  - id: DEV-A03
+    category: ranking
+    split: dev
+    language: pt
+    question: "Qual segmento é o mais rentável?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md A3; ranking.axis explícito"
+    notes: "Janela colapsada em total para ranquear a taxa da janela."
+
+  - id: DEV-A04
+    category: ranking
+    split: dev
+    language: pt
+    question: "Qual o produto menos rentável?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: product, level: product}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations:
+      - {type: ranking, params: {order: asc, axis: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md A4"
+    notes: ""
+
+  - id: DEV-A05
+    category: sanity
+    split: dev
+    language: pt
+    question: "Quantos contratos ativos existem hoje?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects: [{type: total, level: total}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md A5"
+    notes: ""
+
+  - id: DEV-A06
+    category: sanity
+    split: dev
+    language: pt
+    question: "Quantos contratos ativos por grupo de produto?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects: [{type: product, level: product_group}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md A6"
+    notes: ""
+
+  - id: DEV-A07
+    category: comparison
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade por tipo de pessoa (PF vs PJ)?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: person_type}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations:
+      - {type: comparison, params: {across: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md A7"
+    notes: ""
+
+  - id: DEV-A08
+    category: vinculacao
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade por nível de vinculação?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_relationship, level: relationship_depth}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md A8 (UC3)"
+    notes: "Eixo ordinal de vinculação."
+
+  - id: DEV-A09
+    category: principalidade
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade por nível de principalidade?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_principality, level: principality_depth}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md A9"
+    notes: ""
+
+  - id: DEV-A10
+    category: aggregation_trap
+    split: dev
+    language: pt
+    question: "Analise a dispersão da rentabilidade entre os segmentos no último ano."
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: month}
+    expected_methods: [std]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 seed (UC1); std sobre a série"
+    notes: >
+      O pacote `dispersion` é proibido em ratio; o número verificado da
+      volatilidade é `std` sobre a série.
+
+  # ======================================================================
+  # Bloco B — amostra governada, hierarquia e cruzamento
+  # ======================================================================
+  - id: DEV-B11
+    category: principalidade
+    split: dev
+    language: pt
+    question: "Qual produto é o mais rentável entre clientes de alta principalidade?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: product, level: product}]
+        sample: [{type: customer_principality, level: principality_depth, value_id: high}]
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: entity}}
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B11 (UC4)"
+    notes: "Principalidade entra como `sample`, nunca como quebra do resultado."
+
+  - id: DEV-B12
+    category: principalidade
+    split: dev
+    language: pt
+    question: "Qual produto é o mais rentável entre clientes de baixa principalidade?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: product, level: product}]
+        sample: [{type: customer_principality, level: principality_depth, value_id: low}]
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B12"
+    notes: ""
+
+  - id: DEV-B13
+    category: vinculacao
+    split: dev
+    language: pt
+    question: "Qual segmento é o mais rentável olhando só alta vinculação?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: [{type: customer_relationship, level: relationship_depth, value_id: high}]
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B13"
+    notes: ""
+
+  - id: DEV-B14
+    category: distribuicao
+    split: dev
+    language: pt
+    question: "Como os produtos se distribuem entre os segmentos?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects:
+          - {type: customer_segmentation, level: segment}
+          - {type: product, level: product}
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [share]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B14 (UC2); share exige resultado colapsado"
+    notes: "Snapshot colapsa o resultado; share calcula a participação."
+
+  - id: DEV-B15
+    category: distribuicao
+    split: dev
+    language: pt
+    question: "Como os produtos se distribuem entre os segmentos dentro de alta vinculação?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects:
+          - {type: customer_segmentation, level: segment}
+          - {type: product, level: product}
+        sample: [{type: customer_relationship, level: relationship_depth, value_id: high}]
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [share]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B15"
+    notes: ""
+
+  - id: DEV-B16
+    category: hierarquia
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade por segmento e subsegmento?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects:
+          - {type: customer_segmentation, level: segment}
+          - {type: customer_segmentation, level: subsegment}
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B16"
+    notes: "Dois subjects do mesmo type."
+
+  - id: DEV-B17
+    category: hierarquia
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade por grupo de produto e por subproduto?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects:
+          - {type: product, level: product_group}
+          - {type: product, level: subproduct}
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B17"
+    notes: ""
+
+  - id: DEV-B18
+    category: hierarquia
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade de Cartão por segmento?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects:
+          - {type: customer_segmentation, level: segment}
+          - {type: product, level: product}
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B18"
+    notes: "Cartão é o produto de interesse; a quebra é segmento × produto."
+
+  - id: DEV-B19
+    category: amostra
+    split: dev
+    language: pt
+    question: "Quantos contratos por produto entre clientes Private?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects: [{type: product, level: product}]
+        sample: [{type: customer_segmentation, level: segment, value_id: private}]
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B19"
+    notes: "Catálogo da amostra = catálogo das quebras."
+
+  - id: DEV-B20
+    category: comparison
+    split: dev
+    language: pt
+    question: "A rentabilidade por produto muda entre Varejo PF e Corporate Large?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: product, level: product}]
+        sample: [{type: customer_segmentation, level: segment, value_id: varejo_pf}]
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+      - rule_id: profitability
+        subjects: [{type: product, level: product}]
+        sample: [{type: customer_segmentation, level: segment, value_id: corporate_large}]
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null, null]
+    expected_operations:
+      - {type: comparison, params: {across: result}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md B20"
+    notes: "Dois planos na mesma janela; comparison entre resultados."
+
+  # ======================================================================
+  # Bloco C — tempo
+  # ======================================================================
+  - id: DEV-C21
+    category: temporal
+    split: dev
+    language: pt
+    question: "A rentabilidade do Varejo PF subiu ou caiu nos últimos 6 meses?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: [{type: customer_segmentation, level: segment, value_id: varejo_pf}]
+        period: {start: "2026-03-01", end: "2026-08-31", type: series, grain: month}
+    expected_methods: [trend]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C21"
+    notes: "Direção é da tendência determinística, nunca do texto do LLM."
+
+  - id: DEV-C22
+    category: temporal
+    split: dev
+    language: pt
+    question: "Qual segmento foi o mais volátil no trimestre?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-06-01", end: "2026-08-31", type: series, grain: month}
+    expected_methods: [std]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C22"
+    notes: ""
+
+  - id: DEV-C23
+    category: aggregation_trap
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade trimestral consolidada de 2026?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-01-01", end: "2026-08-31", type: series, grain: quarter}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C23; execute_calculation 8.1/8.2"
+    notes: >
+      Armadilha de rollup: a taxa do trimestre é Σmargem ÷ Σsaldo no grão,
+      nunca a média das taxas mensais (null sobre o grão já re-deriva).
+
+  - id: DEV-C24
+    category: temporal
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade anual de 2025 vs 2026?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: []
+        period: {start: "2025-01-01", end: "2025-08-31", type: series, grain: total}
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: []
+        period: {start: "2026-01-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null, variation]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C24; variation exige resultado colapsado"
+    notes: >
+      Mesma duração (jan–ago), grão total, resultados colapsados: a variação
+      lê os dois planos e devolve diferença e percentual.
+
+  - id: DEV-C25
+    category: temporal
+    split: dev
+    language: pt
+    question: "Qual mês teve a maior rentabilidade da carteira?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: month}
+    expected_methods: [null]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: period}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C25; ranking.axis distingue período de entidade"
+    notes: ""
+
+  - id: DEV-C26
+    category: temporal
+    split: dev
+    language: pt
+    question: "Agosto/2026 foi melhor que agosto/2025? (YoY)"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: []
+        period: {start: "2025-08-31", end: "2025-08-31", type: snapshot, grain: month}
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null, variation]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — gap entre janelas é legítimo (YoY)"
+    notes: "O intervalo de 11 meses entre as fotos é o próprio YoY."
+
+  - id: DEV-C27
+    category: temporal
+    split: dev
+    language: pt
+    question: "Quanto a rentabilidade do Corporate Large variou de maio para agosto? (p.p.)"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: [{type: customer_segmentation, level: segment, value_id: corporate_large}]
+        period: {start: "2026-05-31", end: "2026-05-31", type: snapshot, grain: month}
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: [{type: customer_segmentation, level: segment, value_id: corporate_large}]
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null, variation]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C27"
+    notes: ""
+
+  - id: DEV-C28
+    category: temporal
+    split: dev
+    language: pt
+    question: "Qual segmento cresceu mais em contratos no último ano?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2025-08-31", end: "2025-08-31", type: snapshot, grain: month}
+      - rule_id: contract_count
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null, variation]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C28"
+    notes: ""
+
+  - id: DEV-C29
+    category: temporal
+    split: dev
+    language: pt
+    question: "A volatilidade da rentabilidade aumentou no último semestre?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-02-28", type: series, grain: month}
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-03-01", end: "2026-08-31", type: series, grain: month}
+    expected_methods: [std, std]
+    expected_operations:
+      - {type: comparison, params: {across: result}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C29"
+    notes: "Dois std lado a lado (comparison across=result)."
+
+  - id: DEV-C30
+    category: temporal
+    split: dev
+    language: pt
+    question: "Existiu algum mês atípico na rentabilidade do Varejo PJ?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample: [{type: customer_segmentation, level: segment, value_id: varejo_pj}]
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: month}
+    expected_methods: [outlier]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md C30"
+    notes: ""
+
+  # ======================================================================
+  # Bloco D — múltiplas métricas e composição
+  # ======================================================================
+  - id: DEV-D31
+    category: multi_metrica
+    split: dev
+    language: pt
+    question: "Qual segmento tem mais contratos e maior rentabilidade?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null, null]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: entity}}
+      - {type: ranking, params: {order: desc, axis: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D31"
+    notes: "Uma métrica por plano, mesma janela."
+
+  - id: DEV-D32
+    category: multi_metrica
+    split: dev
+    language: pt
+    question: "Os segmentos com mais contratos são os mais rentáveis?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null, null, correlation]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D32"
+    notes: >
+      `correlation` devolve o coeficiente verificado; a explicação não afirma
+      causalidade.
+
+  - id: DEV-D33
+    category: vinculacao
+    split: dev
+    language: pt
+    question: "Clientes com maior vinculação são mais rentáveis?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_relationship, level: relationship_depth}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [trend]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D33 (UC3)"
+    notes: "Eixo ordinal permite trend sobre níveis."
+
+  - id: DEV-D34
+    category: causalidade
+    split: dev
+    language: pt
+    question: "Vinculação ou principalidade explica melhor a rentabilidade?"
+    expected_behavior: refuse_scope
+    expected_route: refuse
+    expected_refusal_reason: out_of_scope
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D34"
+    notes: >
+      Associação não é explicação: os coeficientes podem ser devolvidos, mas
+      eleger qual "explica melhor" é afirmação causal.
+
+  - id: DEV-D35
+    category: gap
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade média por contrato de cada produto?"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D35"
+    notes: "Métrica derivada (razão entre métricas) não existe no contrato."
+
+  - id: DEV-D36
+    category: ranking
+    split: dev
+    language: pt
+    question: "Qual segmento concentra a maior carteira?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: outstanding_balance
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null]
+    expected_operations:
+      - {type: ranking, params: {order: desc, axis: entity}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D36"
+    notes: ""
+
+  - id: DEV-D37
+    category: share
+    split: dev
+    language: pt
+    question: "Que % da carteira está em Varejo PF?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: outstanding_balance
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [share]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D37"
+    notes: ""
+
+  - id: DEV-D38
+    category: aggregation_trap
+    split: dev
+    language: pt
+    question: "Rentabilidade por segmento ponderada pela carteira vs. simples?"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D38; definitions.md — weighting"
+    notes: >
+      A ponderação é regra da family, nunca escolha do plano: a média simples
+      de taxas é um número errado e não é oferecida.
+
+  - id: DEV-D39
+    category: pareto
+    split: dev
+    language: pt
+    question: "Quais produtos representam 80% dos contratos? (Pareto)"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects: [{type: product, level: product}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [share]
+    expected_operations:
+      - {type: cumulative_share, params: {cutoff: 0.8}}
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D39"
+    notes: ""
+
+  - id: DEV-D40
+    category: decomposicao
+    split: dev
+    language: pt
+    question: "Quanto cada segmento contribuiu para a variação da rentabilidade total?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2024-09-01", end: "2025-08-31", type: series, grain: month}
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: month}
+      - rule_id: outstanding_balance
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2024-09-01", end: "2025-08-31", type: series, grain: total}
+    expected_methods: [null, null, share, variation]
+    expected_operations:
+      - {type: decomposition, params: {}}
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md D40"
+    notes: >
+      `decomposition` referencia `variation` (duas janelas) e `share` (peso da
+      carteira base); os três planos alimentam o pacote.
+
+  # ======================================================================
+  # Bloco E — expressividade da amostra
+  # ======================================================================
+  - id: DEV-E41
+    category: amostra
+    split: dev
+    language: pt
+    question: "Rentabilidade de quem tem alta principalidade e alta vinculação"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: total, level: total}]
+        sample:
+          - {type: customer_principality, level: principality_depth, value_id: high}
+          - {type: customer_relationship, level: relationship_depth, value_id: high}
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md E41"
+    notes: "Amostra é lista: duas igualdades, sem AND explícito."
+
+  - id: DEV-E42
+    category: gap
+    split: dev
+    language: pt
+    question: "Rentabilidade de principalidade média ou alta"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md E42"
+    notes: "Multivalor / IN não é representável (uma igualdade por condição)."
+
+  - id: DEV-E43
+    category: gap
+    split: dev
+    language: pt
+    question: "Rentabilidade exceto CIB"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md E43"
+    notes: "Negação não é representável."
+
+  - id: DEV-E44
+    category: gap
+    split: dev
+    language: pt
+    question: "Segmentos com rentabilidade abaixo de 5%"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md E44"
+    notes: "Seleção por valor de métrica (having) não é representável na amostra."
+
+  - id: DEV-E45
+    category: gap
+    split: dev
+    language: pt
+    question: "Produtos com mais de 1.000 contratos ativos"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md E45"
+    notes: "Having sobre contagem não é representável."
+
+  - id: DEV-E46
+    category: ranking
+    split: dev
+    language: pt
+    question: "Top 5 produtos mais rentáveis"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: product, level: product}]
+        sample: []
+        period: {start: "2025-09-01", end: "2026-08-31", type: series, grain: total}
+    expected_methods: [null]
+    expected_operations:
+      - {type: ranking, params: {order: desc, top_n: 5, axis: entity}}
+    expected_result_ref: null
+    severity: low
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md E46"
+    notes: ""
+
+  - id: DEV-E47
+    category: governanca
+    split: dev
+    language: pt
+    question: "Clientes sem nenhum contrato ativo"
+    expected_behavior: refuse_policy
+    expected_route: refuse
+    expected_refusal_reason: governance
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md E47"
+    notes: "Grão individual é bloqueado por construção; não há reformulação."
+
+  - id: DEV-E48
+    category: gap
+    split: dev
+    language: pt
+    question: "Rentabilidade dos 10% de clientes mais rentáveis"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md E48"
+    notes: "Percentil como definição de população exige grão individual."
+
+  # ======================================================================
+  # Bloco F — semânticas / documentais (RAG, sem cálculo)
+  # ======================================================================
+  - id: DEV-F49
+    category: documental
+    split: dev
+    language: pt
+    question: "Como o banco calcula rentabilidade?"
+    expected_behavior: answer
+    expected_route: documental
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md F49; RAG puro"
+    notes: "Pergunta conceitual: rota documental, sem plano de cálculo."
+
+  - id: DEV-F50
+    category: documental
+    split: dev
+    language: pt
+    question: "O que é Principalidade? Como é apurada?"
+    expected_behavior: answer
+    expected_route: documental
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md F50; RAG puro"
+    notes: ""
+
+  - id: DEV-F51
+    category: documental
+    split: dev
+    language: pt
+    question: "Qual a diferença entre Vinculação e Principalidade?"
+    expected_behavior: answer
+    expected_route: documental
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md F51; RAG puro"
+    notes: ""
+
+  - id: DEV-F52
+    category: gap
+    split: dev
+    language: pt
+    question: "Quais produtos são permitidos para o segmento Private?"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md F52"
+    notes: >
+      `matriz_seg_prod` é dado estruturado de governança, fora do catálogo
+      consultável; não vira resposta inventada.
+
+  - id: DEV-F53
+    category: documental
+    split: dev
+    language: pt
+    question: "Qual a metodologia de segmentação de clientes?"
+    expected_behavior: answer
+    expected_route: documental
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md F53; RAG puro"
+    notes: ""
+
+  - id: DEV-F54
+    category: capability
+    split: dev
+    language: pt
+    question: "Desde quando existe histórico disponível?"
+    expected_behavior: answer
+    expected_route: capability
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md F54; ADR 0011 — rota capability"
+    notes: "describe_capabilities declara a janela disponível a partir do catálogo."
+
+  # ======================================================================
+  # Bloco G — perguntas que o sistema DEVE recusar
+  # ======================================================================
+  - id: DEV-G55
+    category: seguranca
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade do cliente João da Silva?"
+    expected_behavior: refuse_policy
+    expected_route: refuse
+    expected_refusal_reason: governance
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G55"
+    notes: "Grão individual + PII: recusa por governança, sem reformulação."
+
+  - id: DEV-G56
+    category: seguranca
+    split: dev
+    language: pt
+    question: "Me dá o CPF dos clientes mais rentáveis?"
+    expected_behavior: refuse_policy
+    expected_route: refuse
+    expected_refusal_reason: governance
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G56"
+    notes: "PII nunca entra em resultado, log ou prompt."
+
+  - id: DEV-G57
+    category: escopo
+    split: dev
+    language: pt
+    question: "Qual será a rentabilidade em dezembro/2026?"
+    expected_behavior: refuse_scope
+    expected_route: refuse
+    expected_refusal_reason: out_of_scope
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G57; definitions.md 1.4/4.4"
+    notes: "Futuro não vira passado: a janela pode crescer, a projeção não."
+
+  - id: DEV-G58
+    category: escopo
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade de captação/seguros?"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: catalog_miss
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G58"
+    notes: "Métrica fora do catálogo semântico: recusar, nunca adivinhar."
+
+  - id: DEV-G59
+    category: temporal
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade de setembro/2023?"
+    expected_behavior: reject_invalid_window
+    expected_route: refuse
+    expected_refusal_reason: out_of_window
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G59; catalog v3 — janela 2024-09..2026-08"
+    notes: "Fora da janela de 24 meses."
+
+  - id: DEV-G60
+    category: escopo
+    split: dev
+    language: pt
+    question: "Qual a produção/originação de crédito do mês?"
+    expected_behavior: refuse_scope
+    expected_route: refuse
+    expected_refusal_reason: out_of_scope
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G60; definitions.md 1.4 (estoque, não fluxo)"
+    notes: "Métrica de fluxo: o MVP modela estoque."
+
+  - id: DEV-G61
+    category: escopo
+    split: dev
+    language: pt
+    question: "Quantos contratos foram encerrados no mês?"
+    expected_behavior: refuse_scope
+    expected_route: refuse
+    expected_refusal_reason: out_of_scope
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G61"
+    notes: "Encerramento é fluxo, pela mesma razão do G60."
+
+  - id: DEV-G62
+    category: escopo
+    split: dev
+    language: pt
+    question: "Recalcule a margem do contrato X com spread de 3%"
+    expected_behavior: refuse_scope
+    expected_route: refuse
+    expected_refusal_reason: out_of_scope
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G62"
+    notes: "Recálculo de valor oficial (source-owned) não é do sistema."
+
+  - id: DEV-G63
+    category: causalidade
+    split: dev
+    language: pt
+    question: "Por que a rentabilidade do Varejo caiu?"
+    expected_behavior: refuse_scope
+    expected_route: refuse
+    expected_refusal_reason: out_of_scope
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G63"
+    notes: >
+      A decomposição pode ser mostrada; a causa não é determinística e não
+      vira afirmação.
+
+  - id: DEV-G64
+    category: escopo
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade por região/agência?"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: catalog_miss
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md G64"
+    notes: "Dimensão inexistente no modelo."
+
+  # ======================================================================
+  # Bloco H — ambíguas: devem pedir clarificação
+  # ======================================================================
+  - id: DEV-H65
+    category: clarify
+    split: dev
+    language: pt
+    question: "Qual o melhor segmento?"
+    expected_behavior: clarify
+    expected_route: clarify
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md H65"
+    notes: '"Melhor" é ambíguo: rentabilidade, carteira ou contratos?'
+
+  - id: DEV-H66
+    category: clarify
+    split: dev
+    language: pt
+    question: "Como está a rentabilidade?"
+    expected_behavior: clarify
+    expected_route: clarify
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md H66"
+    notes: "Sem eixo e sem período."
+
+  - id: DEV-H67
+    category: clarify
+    split: dev
+    language: pt
+    question: "Compare Varejo e Corporate"
+    expected_behavior: clarify
+    expected_route: clarify
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md H67"
+    notes: "Qual métrica, qual período?"
+
+  - id: DEV-H68
+    category: clarify
+    split: dev
+    language: pt
+    question: "Rentabilidade do último trimestre"
+    expected_behavior: clarify
+    expected_route: clarify
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md H68"
+    notes: "Trimestre civil ou 3 meses móveis? type/grain existem para isso."
+
+  - id: DEV-H69
+    category: clarify
+    split: dev
+    language: pt
+    question: "Distribuição de produto"
+    expected_behavior: clarify
+    expected_route: clarify
+    expected_refusal_reason: null
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: medium
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md H69"
+    notes: "Por qual dimensão? Contagem ou carteira?"
+
+  # ======================================================================
+  # Bloco I — valor de referência externo (representante do gap)
+  # ======================================================================
+  - id: DEV-I70
+    category: gap
+    split: dev
+    language: pt
+    question: "Quanto falta para a meta de rentabilidade do ano?"
+    expected_behavior: not_expressible
+    expected_route: refuse
+    expected_refusal_reason: not_expressible
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "cases.md I70; ADR 0006 (catálogo determina)"
+    notes: >
+      Nenhum parâmetro de plano pode nascer de fora do catálogo; a meta vem de
+      documento não governado. I71–I74 não entraram neste slice.
+
+  # ======================================================================
+  # Topologia temporal (checklist §4) — violações tipificadas
+  # ======================================================================
+  - id: DEV-T01
+    category: temporal_topology
+    split: dev
+    language: pt
+    question: "Compare o 2º trimestre com janeiro–agosto/26."
+    expected_behavior: reject_invalid_window
+    expected_route: refuse
+    expected_refusal_reason: invalid_window
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — temporal topology (overlap)"
+    notes: "2T/26 (abr–jun) e jan–ago/26 se sobrepõem; variation exige disjunção."
+
+  - id: DEV-T02
+    category: temporal_topology
+    split: dev
+    language: pt
+    question: "Compare os últimos 3 meses com os últimos 12 meses."
+    expected_behavior: reject_invalid_window
+    expected_route: refuse
+    expected_refusal_reason: invalid_window
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — temporal topology (duration)"
+    notes: "Janelas de durações diferentes."
+
+  - id: DEV-T03
+    category: temporal_topology
+    split: dev
+    language: pt
+    question: "Compare agosto/2026 com o 2º trimestre de 2025."
+    expected_behavior: reject_invalid_window
+    expected_route: refuse
+    expected_refusal_reason: invalid_window
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — temporal topology (grain)"
+    notes: "Grão month contra quarter."
+
+  - id: DEV-T04
+    category: temporal_topology
+    split: dev
+    language: pt
+    question: "Compare o saldo de agosto/2026 com a série mensal do ano."
+    expected_behavior: reject_invalid_window
+    expected_route: refuse
+    expected_refusal_reason: invalid_window
+    expected_plan: null
+    expected_methods: []
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — temporal topology (type)"
+    notes: "snapshot contra series."
+
+  # ======================================================================
+  # Armadilhas de agregação e bordas de dado (checklist §4)
+  # ======================================================================
+  - id: DEV-Q01
+    category: ausencia
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade mensal do Private entre junho e agosto/2026?"
+    expected_behavior: answer_with_caveat
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-06-01", end: "2026-08-31", type: series, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: ORACLE-01
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — ausência é null com motivo, nunca 0"
+    notes: >
+      Agosto/2026 não tem observação para o Private: a célula é ausente
+      (ORACLE-01), jamais 0. Plano idêntico ao caso congelado.
+
+  - id: DEV-Q02
+    category: small_cell
+    split: dev
+    language: pt
+    question: "Quantos clientes o Varejo PF tem em agosto/2026?"
+    expected_behavior: answer_with_caveat
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: customer_count
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §8 — small-cell k = 10 (ADR 0009)"
+    notes: >
+      Célula com 2 clientes < k = 10: a camada de análise suprime com
+      complementar (ADR 0009); o motor confere o número bruto contra o
+      fixture. A supressão em si é exercitada nos testes do pipeline e no e2e.
+
+  - id: DEV-Q03
+    category: aggregation_trap
+    split: dev
+    language: pt
+    question: "Quantos clientes por produto em agosto/2026?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: customer_count
+        subjects: [{type: product, level: product}]
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: ORACLE-06
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — soma de clientes por produto"
+    notes: >
+      Armadilha: contagem distinta de clientes por produto, nunca a soma das
+      contagens das combinações. Plano idêntico ao caso congelado ORACLE-06.
+
+  - id: DEV-Q04
+    category: aggregation_trap
+    split: dev
+    language: pt
+    question: "Qual a rentabilidade do trimestre por segmento?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: profitability
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-06-01", end: "2026-08-31", type: series, grain: quarter}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: ORACLE-09
+    severity: high
+    demo: true
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — rentabilidade do trimestre (rollup)"
+    notes: >
+      Armadilha de rollup: a taxa do trimestre re-deriva Σmargem ÷ Σsaldo no
+      grão, nunca a média das taxas mensais. Plano idêntico ao ORACLE-09.
+
+  - id: DEV-Q05
+    category: aggregation_trap
+    split: dev
+    language: pt
+    question: "Qual o saldo da carteira nos últimos 3 meses, por segmento?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: outstanding_balance
+        subjects: [{type: customer_segmentation, level: segment}]
+        sample: []
+        period: {start: "2026-06-01", end: "2026-08-31", type: series, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — saldo acumulado de 3 meses"
+    notes: >
+      Armadilha de estoque: cada mês é o saldo do fim do período, nunca a soma
+      dos meses (R$ 200 parados por três meses continuam R$ 200).
+
+  - id: DEV-Q06
+    category: aggregation_trap
+    split: dev
+    language: pt
+    question: "Quantos contratos por segmento e por produto em agosto/2026?"
+    expected_behavior: answer
+    expected_route: analytical
+    expected_refusal_reason: null
+    expected_plan:
+      - rule_id: contract_count
+        subjects:
+          - {type: customer_segmentation, level: segment}
+          - {type: product, level: product}
+        sample: []
+        period: {start: "2026-08-31", end: "2026-08-31", type: snapshot, grain: month}
+    expected_methods: [null]
+    expected_operations: []
+    expected_result_ref: null
+    severity: high
+    demo: false
+    fixtures: {seed: 42, dataset: parity-tiny-v1}
+    definitions_ref: "checklist §4 — soma de contratos por segmento e produto"
+    notes: >
+      Armadilha: contagem distinta de contratos na célula (segmento × produto),
+      nunca a soma de contagens parciais.

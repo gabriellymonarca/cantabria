@@ -1,0 +1,70 @@
+# Copy to config.yaml (gitignored) and fill in the real values.
+# Every key is required.
+llm:
+  model: gpt-4o-mini
+  base_url: https://api.openai.com/v1
+  api_key: CHANGE_ME
+  temperature: 0.0
+  timeout: 60.0
+  # Sent on every request; identify the client, not the SDK.
+  headers:
+    User-Agent: cantabria/0.1.0
+  # Header carrying the per-conversation session id; empty disables it.
+  session_header: ""
+
+# Embeddings para o RAG semântico (Qdrant). OPCIONAL e DESLIGADO por padrão:
+# sem a seção o Cantábria usa a busca lexical (BM25) sobre data/knowledge e a
+# demo roda offline. Para ligar (exige `make ingest` e o profile `stores`),
+# descomente e preencha: base_url/api_key vazios herdam o endpoint do `llm`,
+# e o modelo precisa existir nesse endpoint.
+# embeddings:
+#   model: text-embedding-3-small
+#   base_url: null
+#   api_key: null
+
+auth:
+  # Google Workspace domains accepted at login; empty accepts any verified identity.
+  allowed_domains: []
+  # Local demo login (Chainlit user/password screen backed by data/auth/users.yaml).
+  # Off by default; existing configs without these keys keep working.
+  local_login_enabled: false
+  users_file: data/auth/users.yaml
+  # SSO email -> roles assigned at login; others fall back to default_roles.
+  role_map: {}
+  default_roles: []
+
+logging:
+  level: INFO
+
+observability:
+  # Tracing is OFF by default so the app runs offline from Langfuse: traces
+  # are a no-op and the app logs a warning. Set to true after starting the
+  # `observability` profile (./scripts/langfuse_up.sh, see README §
+  # Observability); when enabled, empty host/keys fail startup loudly
+  # (ConfigError). The keys below are placeholders and are ignored while
+  # enabled is false.
+  enabled: false
+  # Inside Docker (compose `app` or the devcontainer) the published Langfuse
+  # port is reached through the host gateway. Use http://localhost:3000 when
+  # running the app directly on the host.
+  host: http://host.docker.internal:3000
+  # Keys created on first boot from infrastructure/.env
+  # (LANGFUSE_INIT_PROJECT_PUBLIC_KEY / LANGFUSE_INIT_PROJECT_SECRET_KEY).
+  # Replace when enabling tracing; scripts/preflight.py refuses CHANGE_ME
+  # anywhere in config.yaml.
+  public_key: ""
+  secret_key: ""
+  environment: local
+  # Free-form release marker shown in the Langfuse UI; empty omits it.
+  release: ""
+
+data:
+  # Location of the governed data files. Every field is optional: null
+  # resolves to the default derived from the data dir. Relative paths
+  # resolve against the directory containing this file. Each field can be
+  # overridden with CANTABRIA_* environment variables (see .env.example).
+  data_dir: null
+  catalogs_dir: null
+  interpretation_prompts_dir: null
+  insight_prompts_dir: null
+  capabilities_file: null

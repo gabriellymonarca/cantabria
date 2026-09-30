@@ -1,0 +1,12 @@
+# Local development Redis for the Langfuse queue.
+#
+# TEMPLATE: rendered by scripts/langfuse_up.sh from infrastructure/.env
+# (LANGFUSE_REDIS_AUTH, must match REDIS_AUTH in the rendered common.env);
+# the mounted healthcheck script reads the password back from this file.
+requirepass ${LANGFUSE_REDIS_AUTH}
+
+# Langfuse requires an eviction-free cache.
+maxmemory-policy noeviction
+
+appendonly no
+dir /data

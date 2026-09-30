@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cantabria"
+version = "0.1.0"
+description = "Governed natural-language financial analysis."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "chainlit>=2.12,<2.13",
+    "clickhouse-connect>=0.7,<1",
+    "langchain-openai>=1,<2",
+    "langfuse>=4,<5",
+    "minio>=7,<8",
+    "openinference-instrumentation-langchain>=0.1.76,<0.2",
+    "pandas>=2.2,<4",
+    "plotly>=5.3,<7",
+    "pydantic>=2,<3",
+    "pymongo>=4.6,<5",
+    "pyyaml>=6,<7",
+    "qdrant-client>=1.12,<2",
+    "structlog>=26,<27",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["contexts*", "cross_cutting*", "entrypoints*", "eval*", "shared*"]
+
+[tool.ruff]
+src = ["src"]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "C901", # mccabe cyclomatic complexity
+]
+ignore = [
+    "E501", # line length is a formatter concern, not a lint rule
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["contexts", "cross_cutting", "entrypoints", "eval", "shared"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src"]
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: exige Docker (testcontainers) para subir ClickHouse",
+]
+addopts = "-m 'not integration'"

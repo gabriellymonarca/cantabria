@@ -1,0 +1,70 @@
+# Capacidades de autorização por role (configuração do Auth).
+#
+# O catálogo determina o que EXISTE; este arquivo determina o que cada role
+# PODE VER. A granularidade é ampla (análise financeira) + fina (métricas e
+# eixos). `validate_plan` nega com `unauthorized` fora daqui.
+#
+# Um role sem entrada cai em `default`. As listas são explícitas: acrescentar
+# uma métrica/eixo ao sistema não concede acesso automaticamente.
+
+default:
+  can_use_financial_analysis: true
+  metrics:
+    - profitability
+    - outstanding_balance
+    - contract_count
+    - customer_count
+    - cdi_rate
+    - selic_rate
+    - inflation_ipca
+  axes:
+    - customer_segmentation.person_type
+    - customer_segmentation.segment_group
+    - customer_segmentation.segment
+    - customer_segmentation.subsegment_group
+    - customer_segmentation.subsegment
+    - customer_relationship.relationship_depth
+    - customer_principality.principality_depth
+    - product.product_group
+    - product.product
+    - product.subproduct
+    - total.total
+
+# Acesso total explícito do admin demo (mesmo conjunto do `default`).
+admin:
+  can_use_financial_analysis: true
+  metrics:
+    - profitability
+    - outstanding_balance
+    - contract_count
+    - customer_count
+    - cdi_rate
+    - selic_rate
+    - inflation_ipca
+  axes:
+    - customer_segmentation.person_type
+    - customer_segmentation.segment_group
+    - customer_segmentation.segment
+    - customer_segmentation.subsegment_group
+    - customer_segmentation.subsegment
+    - customer_relationship.relationship_depth
+    - customer_principality.principality_depth
+    - product.product_group
+    - product.product
+    - product.subproduct
+    - total.total
+
+# Papel restrito de demonstração: vê métricas operacionais, mas não
+# `profitability`, e só quebra por produto/total — `validate_plan` nega o resto
+# com `unauthorized`.
+analista:
+  can_use_financial_analysis: true
+  metrics:
+    - outstanding_balance
+    - contract_count
+    - customer_count
+  axes:
+    - product.product_group
+    - product.product
+    - product.subproduct
+    - total.total

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!--
+  Server overrides for the Langfuse ClickHouse instance. Files in config.d are
+  merged over the image defaults; only the keys below are changed.
+-->
+<clickhouse>
+    <logger>
+        <level>warning</level>
+        <console>true</console>
+    </logger>
+
+    <listen_host>0.0.0.0</listen_host>
+
+    <max_connections>1024</max_connections>
+    <max_concurrent_queries>256</max_concurrent_queries>
+</clickhouse>

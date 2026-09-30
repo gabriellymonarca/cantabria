@@ -1,0 +1,15 @@
+# Normalize line endings to LF in the repository and on checkout, so files
+# edited on Windows still run on the Linux/Docker host.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files: never touch line endings.
+*.xlsm binary
+*.xlsx binary
+*.png binary
+*.jpg binary
+*.pdf binary

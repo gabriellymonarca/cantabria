@@ -1,0 +1,21 @@
+# Dependências Python do Cantábria.
+#
+# Runtime da aplicação:
+clickhouse-connect>=0.7        # adapter ClickHouse (HTTP)
+minio>=7                       # adapter MinIO (documentos e artefatos)
+pymongo>=4.6                   # adapters MongoDB (histórico, planos, eventos)
+qdrant-client>=1.12            # adapter Qdrant (RAG semântico)
+
+# Tooling de geração/seed (utils/):
+faker>=24                      # PII fictícia pt_BR
+openpyxl>=3.1                  # leitura das hierarquias .xlsm
+pyarrow>=15                    # export Parquet opcional
+python-docx>=1.1               # geração/leitura de documentos Word
+python-pptx>=1                 # geração/leitura de documentos PowerPoint
+
+# Dev/test:
+ruff>=0.6                      # lint + format (config em pyproject.toml)
+pytest>=8                      # runner
+hypothesis>=6                  # testes de invariantes (operadores puros)
+mongomock>=4                   # dobro de MongoDB nos testes unitários
+testcontainers>=4              # paridade com ClickHouse/Mongo (testes de integração)

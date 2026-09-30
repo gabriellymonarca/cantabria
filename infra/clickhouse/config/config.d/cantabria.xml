@@ -1,0 +1,37 @@
+<!-- ClickHouse — configuração de servidor (nível infra).
+
+     Aplicado via `config.d/` (o ClickHouse mescla estes arquivos sobre o
+     config.xml padrão da imagem). Mantido enxuto de propósito: o que não for
+     específico do Cantábria fica no default da imagem pinada.
+
+     Perfis de USUÁRIO ficam em users.d/users.xml (junto das identidades). -->
+
+<clickhouse>
+    <logger>
+        <!-- JSON facilita ingestão por stack de observabilidade (Loki/ELK). -->
+        <level>information</level>
+        <format>json</format>
+        <log>/var/log/clickhouse-server/clickhouse-server.log</log>
+        <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+        <size>100M</size>
+        <count>3</count>
+    </logger>
+
+    <!-- Fuso canônico do dataset (meses de referência em America/Sao_Paulo). -->
+    <timezone>America/Sao_Paulo</timezone>
+
+    <!-- Bind em todas as interfaces do container; a exposição real é limitada
+         pelo bind 127.0.0.1 nas portas publicadas (docker-compose). -->
+    <listen_host>0.0.0.0</listen_host>
+
+    <!-- Limite de memória do servidor: evita que uma query ruim derrube o nó. -->
+    <max_server_memory_usage_to_ram_ratio>0.8</max_server_memory_usage_to_ram_ratio>
+
+    <!-- Habilita o constraint `changeable_in_readonly` (ver users.d/users.xml).
+         Sem isto o default é `false` e um perfil com `readonly=1` não consegue
+         liberar settings pontuais — como `join_use_nulls`, que o adapter de
+         dados oficiais precisa para que grupo ausente vire NULL, e não 0. -->
+    <access_control_improvements>
+        <settings_constraints_replace_previous>true</settings_constraints_replace_previous>
+    </access_control_improvements>
+</clickhouse>

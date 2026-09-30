@@ -1,0 +1,164 @@
+
+# Origem: Definição oficial das áreas de negócio. 
+# Quem lê: o Adapter (infraestructure, na expansão) via Port. 
+# retrieve_catalog.py filtra esse arquivo.
+# o Planner (create_plan) escolhe entre o que está aqui. 
+# Se não existir neste catálogo algo que atenda à pergunta do user -> catalog_miss,
+#
+# Arquivo sempre fora de src: dado versionado não mora no core.
+# Trocar este arquivo por Postgres/Qdrant na expansão não toca
+# em entity nem em use case — só no Adapter.
+
+catalog_version: v1
+locale: pt-BR # superfície localizada (sinônimos/labels); os ids canônicos são neutros
+valid_from: "2024-09-01"
+valid_until: null # null = ainda vigente
+source: "area-negocios-financas (ficticio)"
+
+# Data de referência do catálogo: expressões relativas ("últimos 6 meses") são
+# resolvidas contra ela, nunca contra o relógio do LLM. Em runtime o valor
+# efetivo vem do DADO OFICIAL (max(mes_ref), via ReferenceDatePort); este campo
+# é o FALLBACK quando o banco não está acessível. A janela é o recorte temporal
+# disponível; fora dela é recusa tipificada (out_of_window).
+reference_date: "2026-08-31"
+window:
+  start: "2024-09-01"
+  end: "2026-08-31"
+
+metrics:
+  - rule_id: profitability
+    unit: decimal_rate
+    synonyms: ["rentabilidade"]
+  - rule_id: outstanding_balance
+    unit: currency
+    synonyms: ["carteira", "saldo", "estoque"]
+  - rule_id: contract_count
+    unit: count
+    synonyms: ["contratos", "quantidade de contratos"]
+  - rule_id: customer_count
+    unit: count
+    synonyms: ["clientes", "base de clientes"]
+
+# type = QUAL dimensão. level = QUAL grão (vira 1 coluna no group by).
+# Sem grão individual: id_cliente nunca aparece aqui (execute 2.4).
+axes:
+  - type: customer_segmentation
+    level: segment
+    synonyms: ["segmento"]
+  - type: customer_segmentation
+    level: subsegment
+    synonyms: ["subsegmento"]
+  - type: customer_principality
+    level: principality_depth
+    synonyms: ["principalidade"]
+  - type: customer_relationship
+    level: relationship_depth
+    synonyms: ["vinculacao", "vinculação"]
+  - type: product
+    level: product
+    synonyms: ["produto"]
+  - type: product
+    level: product_group
+    synonyms: ["grupo de produto"]
+  - type: total
+    level: total
+    synonyms: []
+
+# O catálogo do filtro É o dos eixos: value pertence a um (type, level)
+# DAQUELA version (validate_plan 5.8). ~10 valores no v0.
+values:
+  - type: customer_segmentation
+    level: segment
+    value_id: varejo_pf
+    labels: ["Varejo PF", "varejo pf", "varejo"]
+  - type: customer_segmentation
+    level: segment
+    value_id: private
+    labels: ["Private", "private"]
+  - type: customer_principality
+    level: principality_depth
+    value_id: high
+    labels: ["alta principalidade", "alta"]
+  - type: customer_principality
+    level: principality_depth
+    value_id: low
+    labels: ["baixa principalidade", "baixa"]
+  - type: customer_relationship
+    level: relationship_depth
+    value_id: high
+    labels: ["alta vinculacao", "alta vinculação"]
+  - type: product
+    level: product_group
+    value_id: rotativo
+    labels: ["Rotativo", "rotativo"]
+  - type: product
+    level: product_group
+    value_id: consignado
+    labels: ["Consignado", "consignado"]
+  - type: product
+    level: product
+    value_id: cartao
+    labels: ["Cartao", "Cartão", "cartao"]
+
+# Confusão conhecida (F51). No v0 é aviso; na expansão vira aresta do grafo.
+not_confuse:
+  - term_a: customer_principality.principality_depth
+    term_b: customer_relationship.relationship_depth
+    note: "trazer os dois lados por construção, sem depender de decomposição"
+
+# JANELAS NOMEADAS: o catálogo declara a DEFINIÇÃO (âncora/offset); as datas
+# concretas são derivadas de `reference_date` por código determinístico
+# (domain/windows.py). Não há data escrita à mão: avançar a janela é atualizar
+# `reference_date`. O LLM escolhe a janela pelo id e copia as datas prontas.
+windows:
+  - id: reference_snapshot
+    labels: ["hoje", "agora", "atualmente", "posição atual", "foto atual", "como está"]
+    kind: snapshot_at_reference
+    type: snapshot
+    grain: month
+  - id: last_closed_month
+    labels: ["último mês", "mês passado", "mês fechado"]
+    kind: trailing_months
+    months: 1
+    type: series
+    grain: month
+  - id: last_3_months
+    labels: ["últimos 3 meses", "3 meses"]
+    kind: trailing_months
+    months: 3
+    type: series
+    grain: month
+  - id: last_6_months
+    labels: ["últimos 6 meses", "meio ano"]
+    kind: trailing_months
+    months: 6
+    type: series
+    grain: month
+  - id: last_12_months
+    labels: ["últimos 12 meses", "último ano", "últimos 4 trimestres", "últimos doze meses"]
+    kind: trailing_months
+    months: 12
+    type: series
+    grain: month
+  - id: current_year
+    labels: ["2026", "ano de 2026", "este ano", "ano corrente"]
+    kind: year_to_date
+    type: series
+    grain: month
+  - id: previous_year
+    labels: ["2025", "ano de 2025", "ano passado"]
+    kind: previous_year
+    type: series
+    grain: month
+
+# DEFAULTS DECLARADOS: aplicados quando a pergunta NÃO traz período, e sempre
+# ecoados em assumptions. O modelo nunca escolhe um default silencioso.
+period_defaults:
+  series: last_12_months
+  snapshot: reference_snapshot
+
+# TYPES analíticos e compatibilidade ficam de fora do v0 de propósito (viram
+# dado na expansão):
+# analytic_types: stage1 null|mean|median|std|... + stage2 ranking|... (analysis_plan.py)
+# compatibility: ex. share só sobre somável (validate_plan camada 6)
+# physical_mapping: ds_segm, principalidade_score/vinculacao_score (faixa) (execute_calculation 2.3)

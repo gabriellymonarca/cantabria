@@ -1,0 +1,227 @@
+# Catálogo semântico v3 — a lista oficial e fechada do que um plano pode usar.
+#
+# O catálogo DETERMINA; o RAG explica. Um termo que não está aqui vira recusa
+# (`catalog_miss`) ou esclarecimento; nunca "o vizinho mais parecido".
+#
+# Fonte de verdade dupla: `create_plan` renderiza este arquivo no prompt e
+# `validate_plan` valida os planos contra ele. Uma fonte só elimina a deriva.
+#
+# O mapeamento físico (coluna, faixa, valor gravado) NÃO mora aqui: é do
+# adapter de cálculo. Trocar de região publica outro catálogo e aponta o
+# adapter para o mapeamento correspondente; o plano não muda.
+#
+# v1 e v2 permanecem imutáveis; mudar o catálogo é publicar uma nova versão.
+#
+# v3 acrescenta (frente §6 e §3.3d do plano de melhorias):
+#   - métricas macro de mercado (`cdi_rate`, `selic_rate`, `inflation_ipca`),
+#     marcadas com `macro: true`: só valem no grão `total.total`, sem `sample`;
+#   - `synonyms` nos métodos, para o planner mapear a intenção do usuário.
+
+catalog_version: v3
+locale: pt-BR
+valid_from: "2024-09-01"
+valid_until: null
+source: "area-negocios-financas (ficticio)"
+
+reference_date: "2026-08-31"       # fallback; runtime vem de max(mes_ref)
+window:
+  start: "2024-09-01"
+  end: "2026-08-31"
+
+metrics:
+  - rule_id: profitability
+    shape: ratio
+    unit: decimal_rate
+    synonyms: ["rentabilidade", "lucratividade"]
+  - rule_id: outstanding_balance
+    shape: stock
+    unit: currency
+    synonyms: ["carteira", "saldo", "estoque", "exposição"]
+  - rule_id: contract_count
+    shape: count
+    unit: count
+    synonyms: ["contratos", "quantidade de contratos"]
+  - rule_id: customer_count
+    shape: count
+    unit: count
+    synonyms: ["clientes", "base de clientes"]
+  # Séries macro do BACEN/IBGE: escalares, só grão total e sem recorte. O
+  # `macro: true` faz `validate_plan` recusar eixos de negócio (not_expressible).
+  - rule_id: cdi_rate
+    shape: ratio
+    unit: decimal_rate
+    macro: true
+    synonyms: ["cdi", "taxa cdi"]
+  - rule_id: selic_rate
+    shape: ratio
+    unit: decimal_rate
+    macro: true
+    synonyms: ["selic", "taxa selic", "juros básicos"]
+  - rule_id: inflation_ipca
+    shape: ratio
+    unit: decimal_rate
+    macro: true
+    synonyms: ["ipca", "inflação"]
+
+axes:
+  - {type: customer_segmentation, level: person_type, kind: nominal, synonyms: ["tipo de pessoa"]}
+  - {type: customer_segmentation, level: segment_group, kind: nominal, synonyms: ["grupo de segmento"]}
+  - {type: customer_segmentation, level: segment, kind: nominal, synonyms: ["segmento"]}
+  - {type: customer_segmentation, level: subsegment_group, kind: nominal, synonyms: ["grupo de subsegmento"]}
+  - {type: customer_segmentation, level: subsegment, kind: nominal, synonyms: ["subsegmento"]}
+  - {type: customer_relationship, level: relationship_depth, kind: ordinal, synonyms: ["vinculação", "vinculacao"]}
+  - {type: customer_principality, level: principality_depth, kind: ordinal, synonyms: ["principalidade"]}
+  - {type: product, level: product_group, kind: nominal, synonyms: ["grupo de produto"]}
+  - {type: product, level: product, kind: nominal, synonyms: ["produto"]}
+  - {type: product, level: subproduct, kind: nominal, synonyms: ["subproduto"]}
+  - {type: total, level: total, kind: nominal, synonyms: []}
+
+# value_id pertence a UM (type, level) desta versão. Eixos sem valores
+# enumerados (subsegmento, subproduto, ...) não aceitam `sample` por valor.
+values:
+  - {type: customer_segmentation, level: person_type, value_id: pf, labels: ["pessoa física", "PF"]}
+  - {type: customer_segmentation, level: person_type, value_id: pj, labels: ["pessoa jurídica", "PJ"]}
+  - {type: customer_segmentation, level: segment, value_id: varejo_pf, labels: ["Varejo PF", "varejo pf", "varejo"]}
+  - {type: customer_segmentation, level: segment, value_id: varejo_pj, labels: ["Varejo PJ", "varejo pj"]}
+  - {type: customer_segmentation, level: segment, value_id: varejo_rural, labels: ["Varejo Rural", "rural"]}
+  - {type: customer_segmentation, level: segment, value_id: private, labels: ["Private", "private"]}
+  - {type: customer_segmentation, level: segment, value_id: corporate_middle, labels: ["Corporate Middle", "corporate middle"]}
+  - {type: customer_segmentation, level: segment, value_id: corporate_large, labels: ["Corporate Large", "corporate large", "corporate"]}
+  - {type: customer_segmentation, level: segment, value_id: cib, labels: ["CIB"]}
+  - {type: customer_relationship, level: relationship_depth, value_id: low, labels: ["baixa vinculação", "baixa"]}
+  - {type: customer_relationship, level: relationship_depth, value_id: medium, labels: ["média vinculação", "média"]}
+  - {type: customer_relationship, level: relationship_depth, value_id: high, labels: ["alta vinculação", "alta"]}
+  - {type: customer_principality, level: principality_depth, value_id: low, labels: ["baixa principalidade", "baixa"]}
+  - {type: customer_principality, level: principality_depth, value_id: medium, labels: ["média principalidade", "média"]}
+  - {type: customer_principality, level: principality_depth, value_id: high, labels: ["alta principalidade", "alta"]}
+  - {type: product, level: product_group, value_id: rotativo, labels: ["Crédito Rotativo", "Rotativo", "rotativo"]}
+  - {type: product, level: product_group, value_id: parcelado, labels: ["Crédito Parcelado", "Parcelado", "parcelado"]}
+  - {type: product, level: product_group, value_id: consignado, labels: ["Crédito Consignado", "Consignado", "consignado"]}
+  - {type: product, level: product_group, value_id: com_garantia, labels: ["Crédito com Garantia", "com garantia"]}
+  - {type: product, level: product_group, value_id: especializado, labels: ["Crédito Especializado", "especializado"]}
+  - {type: product, level: product_group, value_id: transacional, labels: ["Crédito Transacional", "transacional"]}
+  - {type: product, level: product_group, value_id: renegociacao, labels: ["Renegociação de Dívidas", "renegociação"]}
+  - {type: product, level: product, value_id: cartao, labels: ["Cartão", "cartao"]}
+
+# O catálogo declara a DEFINIÇÃO da janela (âncora/offset); as datas concretas
+# são derivadas de `reference_date` por código determinístico (domain/windows.py).
+# A janela define o intervalo e um grão de referência; o plano pode colapsar a
+# janela inteira com `grain: total` (uma linha por grupo, recalculada do fato).
+windows:
+  - id: reference_snapshot
+    labels: ["hoje", "agora", "atualmente", "posição atual", "foto atual", "como está"]
+    kind: snapshot_at_reference
+    type: snapshot
+    grain: month
+  - id: last_closed_month
+    labels: ["último mês", "mês passado", "mês fechado"]
+    kind: trailing_months
+    months: 1
+    type: series
+    grain: month
+  - id: last_3_months
+    labels: ["últimos 3 meses", "3 meses", "último trimestre móvel"]
+    kind: trailing_months
+    months: 3
+    type: series
+    grain: month
+  - id: last_6_months
+    labels: ["últimos 6 meses", "meio ano"]
+    kind: trailing_months
+    months: 6
+    type: series
+    grain: month
+  - id: last_12_months
+    labels: ["últimos 12 meses", "último ano", "últimos 4 trimestres", "últimos doze meses"]
+    kind: trailing_months
+    months: 12
+    type: series
+    grain: month
+  - id: current_year
+    labels: ["2026", "ano de 2026", "este ano", "ano corrente"]
+    kind: year_to_date
+    type: series
+    grain: month
+  - id: previous_year
+    labels: ["2025", "ano de 2025", "ano passado"]
+    kind: previous_year
+    type: series
+    grain: month
+
+# Defaults declarados: aplicados quando a pergunta NÃO traz período, sempre
+# ecoados em `assumptions`. Nunca há default silencioso.
+period_defaults:
+  series: last_12_months
+  snapshot: reference_snapshot
+
+# A matriz que liga a análise à forma da métrica e ao resultado.
+# `requires`: todas as exigências; `requires_any`: ao menos uma.
+compatibility:
+  methods:
+    - method: "null"
+      reads: calculation_plan_ids
+      synonyms: ["valor", "valores", "série"]
+    - method: mean
+      forbids_metric_shape: [ratio]
+      requires: [series]
+      synonyms: ["média", "média simples", "valor médio"]
+    - method: median
+      requires: [series]
+      synonyms: ["mediana", "valor central"]
+    - method: mode
+      requires: [series]
+      synonyms: ["moda", "valor mais frequente"]
+    - method: std
+      requires: [series]
+      synonyms: ["desvio padrão", "volatilidade", "variabilidade"]
+    - method: dispersion
+      forbids_metric_shape: [ratio]
+      requires: [series]
+      synonyms: ["dispersão", "espalhamento", "quartis", "amplitude"]
+    - method: variation
+      reads: calculation_plan_ids
+      count: 2
+      requires: [collapsed_result]
+      same: [rule_id, subjects, sample]
+      windows: disjoint_equal_duration
+      synonyms: ["variação", "comparação entre períodos", "diferença entre janelas"]
+    - method: trend
+      requires_any: [series, ordinal_axis]
+      min_levels: 3
+      synonyms: ["tendência", "regressão", "reta de tendência", "inclinação", "evolução"]
+    - method: share
+      requires_metric_shape: [stock, count]
+      requires: [collapsed_result]
+      synonyms: ["participação", "peso", "concentração", "fatia", "percentual do total"]
+    - method: correlation
+      reads: statistic_refs
+      count: 2
+      requires: [collapsed_result]
+      same: [subjects]
+      min_points: 3
+      synonyms: ["correlação", "relação entre variáveis", "associação"]
+    - method: outlier
+      requires: [series]
+      min_points: 4
+      synonyms: ["outliers", "outlier", "valores atípicos", "discrepantes"]
+  operations:
+    - operation: ranking
+      requires_params: [axis]
+    - operation: comparison
+      params_when: {across: result}
+      count: 2
+    - operation: cumulative_share
+      requires_source: [share]
+    - operation: selection
+      forbidden_rules_metric_shape: {above_mean: ratio, below_mean: ratio}
+    - operation: pivot
+      requires_params: [rows, columns]
+    - operation: decomposition
+      reads: statistic_refs
+      count: 2
+      requires_source: [variation, share]
+
+not_confuse:
+  - term_a: customer_principality.principality_depth
+    term_b: customer_relationship.relationship_depth
+    note: "trazer os dois lados por construção, sem depender de decomposição"

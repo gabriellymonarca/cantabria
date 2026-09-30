@@ -1,0 +1,124 @@
+oracle_version: 1
+dataset:
+  name: parity-tiny-v1
+  reference_date: 2026-08-31
+  fingerprint: 35402898649eea5a5152d68fe933839d92f14ccd0aa0afe4f60b2aaf1cfec165
+tolerance: "1e-9"
+cases:
+  - id: ORACLE-01
+    question: "Qual a rentabilidade mensal por segmento entre junho e agosto/26?"
+    rule_id: profitability
+    subjects:
+      - { type: customer_segmentation, level: segment }
+    sample: []
+    period: { start: 2026-06-01, end: 2026-08-31, type: series, grain: month }
+    expected:
+      - { period: 2026-06-30, subjects: { customer_segmentation.segment: Private }, value: 0.1 }
+      - { period: 2026-06-30, subjects: { customer_segmentation.segment: Varejo PF }, value: 0.1 }
+      - { period: 2026-07-31, subjects: { customer_segmentation.segment: Private }, value: 0.1 }
+      - { period: 2026-07-31, subjects: { customer_segmentation.segment: Varejo PF }, value: 0.166666666667 }
+      - { period: 2026-08-31, subjects: { customer_segmentation.segment: Private }, value: null }
+      - { period: 2026-08-31, subjects: { customer_segmentation.segment: Varejo PF }, value: 0.3 }
+  - id: ORACLE-02
+    question: "Qual a rentabilidade mensal por produto entre junho e agosto/26?"
+    rule_id: profitability
+    subjects:
+      - { type: product, level: product }
+    sample: []
+    period: { start: 2026-06-01, end: 2026-08-31, type: series, grain: month }
+    expected:
+      - { period: 2026-06-30, subjects: { product.product: Cartão }, value: 0.1 }
+      - { period: 2026-06-30, subjects: { product.product: Consignado }, value: 0.1 }
+      - { period: 2026-07-31, subjects: { product.product: Cartão }, value: 0.166666666667 }
+      - { period: 2026-07-31, subjects: { product.product: Consignado }, value: 0.1 }
+      - { period: 2026-08-31, subjects: { product.product: Cartão }, value: 0.3 }
+      - { period: 2026-08-31, subjects: { product.product: Consignado }, value: null }
+  - id: ORACLE-03
+    question: "Qual a rentabilidade mensal por segmento e produto entre junho e agosto/26?"
+    rule_id: profitability
+    subjects:
+      - { type: customer_segmentation, level: segment }
+      - { type: product, level: product }
+    sample: []
+    period: { start: 2026-06-01, end: 2026-08-31, type: series, grain: month }
+    expected:
+      - { period: 2026-06-30, subjects: { customer_segmentation.segment: Private, product.product: Consignado }, value: 0.1 }
+      - { period: 2026-06-30, subjects: { customer_segmentation.segment: Varejo PF, product.product: Cartão }, value: 0.1 }
+      - { period: 2026-07-31, subjects: { customer_segmentation.segment: Private, product.product: Consignado }, value: 0.1 }
+      - { period: 2026-07-31, subjects: { customer_segmentation.segment: Varejo PF, product.product: Cartão }, value: 0.166666666667 }
+      - { period: 2026-08-31, subjects: { customer_segmentation.segment: Private, product.product: Consignado }, value: null }
+      - { period: 2026-08-31, subjects: { customer_segmentation.segment: Varejo PF, product.product: Cartão }, value: 0.3 }
+  - id: ORACLE-04
+    question: "Qual o saldo em carteira por segmento no trimestre?"
+    rule_id: outstanding_balance
+    subjects:
+      - { type: customer_segmentation, level: segment }
+    sample: []
+    period: { start: 2026-06-01, end: 2026-08-31, type: series, grain: quarter }
+    expected:
+      - { period: 2026-06-30, subjects: { customer_segmentation.segment: Private }, value: 1000 }
+      - { period: 2026-06-30, subjects: { customer_segmentation.segment: Varejo PF }, value: 400 }
+      - { period: 2026-09-30, subjects: { customer_segmentation.segment: Private }, value: 1000 }
+      - { period: 2026-09-30, subjects: { customer_segmentation.segment: Varejo PF }, value: 200 }
+  - id: ORACLE-05
+    question: "Quantos contratos ativos por segmento em agosto/26?"
+    rule_id: contract_count
+    subjects:
+      - { type: customer_segmentation, level: segment }
+    sample: []
+    period: { start: 2026-08-31, end: 2026-08-31, type: snapshot, grain: month }
+    expected:
+      - { period: 2026-08-31, subjects: { customer_segmentation.segment: Private }, value: null }
+      - { period: 2026-08-31, subjects: { customer_segmentation.segment: Varejo PF }, value: 2 }
+  - id: ORACLE-06
+    question: "Quantos clientes por produto em agosto/26?"
+    rule_id: customer_count
+    subjects:
+      - { type: product, level: product }
+    sample: []
+    period: { start: 2026-08-31, end: 2026-08-31, type: snapshot, grain: month }
+    expected:
+      - { period: 2026-08-31, subjects: { product.product: Cartão }, value: 2 }
+      - { period: 2026-08-31, subjects: { product.product: Consignado }, value: null }
+  - id: ORACLE-07
+    question: "Qual a rentabilidade total em agosto/26?"
+    rule_id: profitability
+    subjects:
+      - { type: total, level: total }
+    sample: []
+    period: { start: 2026-08-31, end: 2026-08-31, type: snapshot, grain: month }
+    expected:
+      - { period: 2026-08-31, subjects: {}, value: 0.3 }
+  - id: ORACLE-08
+    question: "Qual o produto mais rentável entre clientes de alta Principalidade em agosto/26?"
+    rule_id: profitability
+    subjects:
+      - { type: product, level: product }
+    sample:
+      - { type: customer_principality, level: principality_depth, value_id: high }
+    period: { start: 2026-08-31, end: 2026-08-31, type: snapshot, grain: month }
+    expected:
+      - { period: 2026-08-31, subjects: { product.product: Cartão }, value: 0.5 }
+      - { period: 2026-08-31, subjects: { product.product: Consignado }, value: null }
+  - id: ORACLE-09
+    question: "Qual a rentabilidade do trimestre por segmento?"
+    rule_id: profitability
+    subjects:
+      - { type: customer_segmentation, level: segment }
+    sample: []
+    period: { start: 2026-06-01, end: 2026-08-31, type: series, grain: quarter }
+    expected:
+      - { period: 2026-06-30, subjects: { customer_segmentation.segment: Private }, value: 0.1 }
+      - { period: 2026-06-30, subjects: { customer_segmentation.segment: Varejo PF }, value: 0.1 }
+      - { period: 2026-09-30, subjects: { customer_segmentation.segment: Private }, value: 0.1 }
+      - { period: 2026-09-30, subjects: { customer_segmentation.segment: Varejo PF }, value: 0.22 }
+  - id: ORACLE-10
+    question: "Qual a rentabilidade acumulada da janela por segmento?"
+    rule_id: profitability
+    subjects:
+      - { type: customer_segmentation, level: segment }
+    sample: []
+    period: { start: 2026-06-01, end: 2026-08-31, type: series, grain: total }
+    expected:
+      - { period: 2026-08-31, subjects: { customer_segmentation.segment: Private }, value: 0.1 }
+      - { period: 2026-08-31, subjects: { customer_segmentation.segment: Varejo PF }, value: 0.166666666667 }

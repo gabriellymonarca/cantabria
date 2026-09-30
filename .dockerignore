@@ -1,0 +1,40 @@
+# Contexto de build da imagem `cantabria`. Tudo que o Dockerfile precisa está
+# versionado (`git ls-files` é o teste); o resto fica de fora para o build ser
+# rápido e nunca levar segredos ou estado local para a imagem.
+
+# Segredos e configuração local (montados em runtime, nunca copiados)
+.env
+.env.*
+config.yaml
+infrastructure/.env
+
+# Ambientes e caches
+.venv
+.git
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+.pytest_cache
+.ruff_cache
+.hypothesis
+.mypy_cache
+
+# Chainlit runtime (só .chainlit/config.toml é copiado)
+.chainlit/translations
+.files
+
+# Dataset Parquet gerado localmente (o seed regenera a partir da seed fixa)
+data/dataset
+
+# Fora do escopo da imagem
+tests
+docs
+.devin
+.opencode
+.vscode
+.idea
+infrastructure
+.devcontainer
+.github

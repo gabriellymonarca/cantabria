@@ -1,0 +1,23 @@
+# Usuários locais de DEMONSTRAÇÃO (login por usuário/senha na UI).
+#
+# Somente para demonstração local: as senhas abaixo são públicas e documentadas
+# no README. Nunca coloque segredos reais aqui — este arquivo é versionado.
+# Senha de demonstração (todos os usuários): `cantabria123`.
+#
+# Formato por usuário: `username` (login), `name` (exibição), `email`
+# (identificador na sessão), `password_sha256` (hex do SHA-256 da senha) e
+# `roles` (papéis resolvidos para `User.roles` e checados em capabilities.yaml).
+
+users:
+  - username: analista
+    name: Analista Demo
+    email: analista@cantabria.local
+    password_sha256: 124f2530744f8a95b13e078f4e04769f7cd13c2effc3a9720a65d72fd5b73967
+    roles:
+      - analista
+  - username: admin
+    name: Admin Demo
+    email: admin@cantabria.local
+    password_sha256: 124f2530744f8a95b13e078f4e04769f7cd13c2effc3a9720a65d72fd5b73967
+    roles:
+      - admin

@@ -1,0 +1,109 @@
+<!-- Usuários e perfis — princípio do menor privilégio.
+
+     Dois papéis, com escopos deliberadamente separados:
+
+       cantabria_app   -> LEITURA. É quem o motor determinístico (adapter) usa.
+                          Só SELECT em `cantabria`. Não cria, não altera, não
+                          apaga. Se a aplicação for comprometida, o dano máximo
+                          é leitura dos dados oficiais (já visíveis ao analista).
+
+       cantabria_seed  -> ESCRITA/DDL. Usado APENAS pelo script de setup/seed
+                          (utils/seed_clickhouse.py). Não é injetado no runtime
+                          da aplicação.
+
+     As senhas NUNCA ficam no XML: vêm do ambiente via `from_env` (recurso nativo
+     do ClickHouse — ver docs/configuration-files). O `.env` não é versionado.
+
+     `replace="true"` no nó raiz garante que estas entradas SOBREPÕEM o users.xml
+     default da imagem (o default nasce sem senha e ouvindo no mundo).
+
+     O escopo do `cantabria_app` é definido pelo PERFIL `cantabria_readonly`
+     (`readonly=1`): só leitura, sem CREATE/INSERT/ALTER e sem alterar settings.
+     Usuários definidos em XML não aceitam GRANT SQL (o storage users_xml é
+     read-only), então o controle de acesso mora aqui, no perfil — não em
+     arquivo .sql de grants. -->
+
+<clickhouse replace="true">
+    <users>
+        <!-- default: apenas operação local (loopback), sem acesso remoto. -->
+        <default>
+            <password remove="1"/>
+            <password from_env="CLICKHOUSE_DEFAULT_PASSWORD"/>
+            <networks>
+                <ip>127.0.0.1</ip>
+                <ip>::1</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>0</access_management>
+        </default>
+
+        <cantabria_app>
+            <password from_env="CLICKHOUSE_APP_PASSWORD"/>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>cantabria_readonly</profile>
+            <quota>default</quota>
+            <access_management>0</access_management>
+        </cantabria_app>
+
+        <!-- cantabria_seed: dono do schema (cria/popula tabelas). -->
+        <cantabria_seed>
+            <password from_env="CLICKHOUSE_SEED_PASSWORD"/>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>cantabria_seed_profile</profile>
+            <quota>default</quota>
+            <access_management>0</access_management>
+        </cantabria_seed>
+    </users>
+
+    <profiles>
+        <!-- Somente leitura e agregação: nada de escrita em disco/dispatch. -->
+        <cantabria_readonly>
+            <readonly>1</readonly>
+            <max_memory_usage>4000000000</max_memory_usage>
+            <max_execution_time>60</max_execution_time>
+            <max_result_rows>100000</max_result_rows>
+            <max_result_bytes>104857600</max_result_bytes>
+            <log_queries>1</log_queries>
+            <!-- Ausência de grupo em LEFT JOIN vira NULL, nunca o default do
+                 tipo (0.0). É o valor padrão do perfil e também a ÚNICA setting
+                 que pode ser passada por query em modo readonly: o adapter a
+                 envia explicitamente para que a política de ausência não
+                 dependa do perfil. Exige
+                 `settings_constraints_replace_previous=true` (config.d). -->
+            <join_use_nulls>1</join_use_nulls>
+            <constraints>
+                <join_use_nulls>
+                    <min>0</min>
+                    <max>1</max>
+                    <changeable_in_readonly/>
+                </join_use_nulls>
+            </constraints>
+        </cantabria_readonly>
+
+        <!-- Perfil do seed: escrita liberada, ainda limitado em recursos. -->
+        <cantabria_seed_profile>
+            <max_memory_usage>8000000000</max_memory_usage>
+            <max_execution_time>300</max_execution_time>
+            <log_queries>1</log_queries>
+        </cantabria_seed_profile>
+    </profiles>
+
+    <!-- Quota default explícita: sem eles o merge falha ao referenciar. -->
+    <quotas>
+        <default>
+            <interval>
+                <duration>3600</duration>
+                <queries>0</queries>
+                <errors>0</errors>
+                <result_rows>0</result_rows>
+                <read_rows>0</read_rows>
+                <execution_time>0</execution_time>
+            </interval>
+        </default>
+    </quotas>
+</clickhouse>

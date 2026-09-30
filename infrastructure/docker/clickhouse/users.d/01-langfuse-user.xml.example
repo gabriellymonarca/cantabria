@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!--
+  TEMPLATE: rendered by scripts/langfuse_up.sh from infrastructure/.env
+  (LANGFUSE_CLICKHOUSE_PASSWORD). The rendered file is gitignored.
+  The password must match CLICKHOUSE_PASSWORD in the rendered common.env.
+  access_management lets Langfuse's SQL migrations manage their own access.
+-->
+<clickhouse>
+    <users>
+        <clickhouse>
+            <password>${LANGFUSE_CLICKHOUSE_PASSWORD}</password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+        </clickhouse>
+    </users>
+</clickhouse>
